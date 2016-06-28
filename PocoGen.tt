@@ -1,0 +1,97 @@
+<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Data" #>
+<#@ assembly name="C:\inetpub\wwwroot\ProjectName\packages\Oracle.ManagedDataAccess.12.1\lib\net40\Oracle.ManagedDataAccess.dll" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Data" #>
+<#@ import namespace="System.Globalization" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="Oracle.ManagedDataAccess.Client" #>
+<#@ output extension=".cs" #>
+<#
+	var connectionString = "Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=host_name)(PORT=port_number))(CONNECT_DATA=(SERVER = DEDICATED)(SERVICE_NAME=service_name)));User ID=user_id;Password=user_password;";
+	var tableName = "table_name";
+	var commandText = "select t.DATA_TYPE, t.NULLABLE, t.COLUMN_NAME " +
+		" from ALL_TAB_COLUMNS t " +
+		" where t.TABLE_NAME = upper('" + tableName + "')";
+	var nameSpace = "ProjectName.Namespace";
+	var className = ToTitleCase(tableName);
+#>
+using System;
+
+namespace <#= nameSpace #>
+{
+	public class <#= className #>
+	{
+<#
+	  IDbConnection _connection;
+    IDbCommand _command;
+    IDataReader _dataReader;
+
+    _connection = new OracleConnection(connectionString);
+
+    if (_connection.State != ConnectionState.Open)
+        _connection.Open();
+
+	using (_command = _connection.CreateCommand())
+	{
+		_command.CommandText = commandText;
+
+		using(_dataReader = _command.ExecuteReader())
+		{
+			while(_dataReader.Read())
+			{
+				var dataType = GetDataType(_dataReader["DATA_TYPE"].ToString());
+				var nullableDataType = GetNullable(dataType, _dataReader["NULLABLE"].ToString());
+				var dataName = ToTitleCase(_dataReader["COLUMN_NAME"].ToString());
+#>
+		public <#= nullableDataType #> <#= dataName #> { get; set; }
+<#
+			}
+		}
+	}
+#>
+	}
+}
+
+<#+
+	public static string GetDataType(string dataType)
+	{
+		switch(dataType)
+		{
+			case "NUMBER":
+				dataType = "int";
+			break;
+			case "VARCHAR2":
+				dataType = "string";
+			break;
+			case "DATE":
+				dataType = "DateTime";
+			break;
+		}
+		return dataType;
+	}
+
+	public static string GetNullable(string dataType, string nullable)
+	{
+		switch(nullable)
+		{
+			case "Y":
+				if (dataType != "string")
+					dataType += "?";
+			break;
+			case "N":
+			break;
+		}
+		return dataType;
+	}
+
+	public static string ToTitleCase(string title)
+	{
+		TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
+		var lower = title.ToLower();
+		title = textInfo.ToTitleCase(lower);
+		return title.Replace("_", "");
+	}
+#>
